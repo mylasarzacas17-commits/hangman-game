@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hangman</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d0d;
+    --surface: #161616;
+    --surface2: #1e1e1e;
+    --border: #2a2a2a;
+    --accent: #e8ff47;
+    --accent2: #ff5e5e;
+    --text: #f0f0f0;
+    --muted: #666;
+    --correct: #4cff91;
+    --wrong: #ff5e5e;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-head);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .mistake-badge {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+  }
+
+  .mistake-badge .count { color: var(--accent2); font-weight: 700; }
+
+  .game-wrap {
+    width: 100%;
+    max-width: 900px;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  /* Gallows panel */
+  .gallows-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .category-tag {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    background: rgba(232,255,71,0.08);
+    border: 1px solid rgba(232,255,71,0.2);
+    padding: 4px 10px;
+    border-radius: 4px;
+    align-self: flex-start;
+  }
+
+  #hangman-svg { width: 100%; max-width: 220px; }
+
+  .hint-box {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    line-height: 1.5;
+  }
+
+  .hint-box span { color: var(--text); }
+
+  /* Right panel */
+  .right-panel { display: flex; flex-direction: column; gap: 20px; }
+
+  /* Word display */
+  .word-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    padding: 20px 0;
+  }
+
+  .letter-box {
+    width: 40px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 2px solid var(--muted);
+    font-size: 26px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .letter-box.reveal {
+    animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Keyboard */
+  .keyboard {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 6px;
+  }
+
+  .key {
+    aspect-ratio: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+
+  .key:hover:not(:disabled) {
+    background: var(--surface);
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-1px);
+  }
+
+  .key:disabled { cursor: not-allowed; }
+  .key.correct { background: rgba(76,255,145,0.1); border-color: var(--correct); color: var(--correct); }
+  .key.wrong { background: rgba(255,94,94,0.08); border-color: #333; color: #444; }
+
+  /* Modal overlay */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px 36px;
+    max-width: 380px;
+    width: 90%;
+    text-align: center;
+    animation: slideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(40px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .modal-icon { font-size: 56px; margin-bottom: 16px; }
+  .modal-title { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+  .modal-title.win { color: var(--correct); }
+  .modal-title.lose { color: var(--accent2); }
+  .modal-msg { font-size: 14px; color: var(--muted); font-family: var(--font-mono); margin-bottom: 8px; line-height: 1.6; }
+  .modal-word { font-size: 20px; font-family: var(--font-mono); font-weight: 700; color: var(--accent); margin-bottom: 28px; letter-spacing: 4px; }
+
+  .btn-next {
+    background: var(--accent);
+    color: #0d0d0d;
+    border: none;
+    border-radius: 8px;
+    padding: 14px 36px;
+    font-family: var(--font-head);
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+  }
+
+  .btn-next:hover { transform: scale(1.03); }
+
+  .undo-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: -8px;
+  }
+
+  .btn-undo {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+  }
+
+  .btn-undo:hover:not(:disabled) {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
+  .btn-undo:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+  }
+
+  .btn-undo .undo-letter {
+    font-weight: 700;
+    color: var(--accent2);
+  }
+
+  .btn-undo:disabled .undo-letter { color: inherit; }
+
+  @media (max-width: 640px) {
+    .game-wrap { grid-template-columns: 1fr; }
+    .gallows-panel { flex-direction: row; flex-wrap: wrap; }
+    #hangman-svg { max-width: 140px; }
+    .keyboard { grid-template-columns: repeat(9, 1fr); gap: 4px; }
+    .key { font-size: 11px; }
+    .letter-box { width: 34px; height: 42px; font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Hang<span>man</span></div>
+  <div class="mistake-badge">Mistakes: <span class="count" id="mistake-count">0</span> / 6</div>
+</header>
+
+<div class="game-wrap">
+  <!-- Left: Gallows -->
+  <div class="gallows-panel">
+    <div class="category-tag" id="category-tag">Science</div>
+
+    <svg id="hangman-svg" viewBox="0 0 200 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Gallows structure (always visible) -->
+      <line x1="20" y1="210" x2="180" y2="210" stroke="#444" stroke-width="3" stroke-linecap="round"/>
+      <line x1="60" y1="210" x2="60" y2="20" stroke="#444" stroke-width="3" stroke-linecap="round"/>
+      <line x1="60" y1="20" x2="130" y2="20" stroke="#444" stroke-width="3" stroke-linecap="round"/>
+      <line x1="130" y1="20" x2="130" y2="45" stroke="#444" stroke-width="3" stroke-linecap="round"/>
+      <!-- Hangman parts (hidden by default) -->
+      <circle id="h-head" cx="130" cy="58" r="13" stroke="#e8ff47" stroke-width="2.5" display="none"/>
+      <line id="h-body" x1="130" y1="71" x2="130" y2="120" stroke="#e8ff47" stroke-width="2.5" stroke-linecap="round" display="none"/>
+      <line id="h-arm-l" x1="130" y1="85" x2="110" y2="105" stroke="#e8ff47" stroke-width="2.5" stroke-linecap="round" display="none"/>
+      <line id="h-arm-r" x1="130" y1="85" x2="150" y2="105" stroke="#e8ff47" stroke-width="2.5" stroke-linecap="round" display="none"/>
+      <line id="h-leg-l" x1="130" y1="120" x2="110" y2="148" stroke="#e8ff47" stroke-width="2.5" stroke-linecap="round" display="none"/>
+      <line id="h-leg-r" x1="130" y1="120" x2="150" y2="148" stroke="#e8ff47" stroke-width="2.5" stroke-linecap="round" display="none"/>
+    </svg>
+
+    <div class="hint-box">💡 Hint: <span id="hint-text">—</span></div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="right-panel">
+    <div class="word-display" id="word-display"></div>
+    <div class="undo-row">
+      <button class="btn-undo" id="btn-undo" onclick="undoLastGuess()" disabled>
+        ↩ Undo — <span class="undo-letter" id="undo-label">—</span>
+      </button>
+    </div>
+    <div class="keyboard" id="keyboard"></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-icon" id="modal-icon"></div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-msg" id="modal-msg"></div>
+    <div class="modal-word" id="modal-word"></div>
+    <button class="btn-next" onclick="nextWord()">Next Word →</button>
+  </div>
+</div>
+
+<script>
+const WORDS = {
+  Science: [
+    { word: "PHOTOSYNTHESIS", hint: "How plants convert sunlight into food" },
+    { word: "MITOCHONDRIA", hint: "The powerhouse of the cell" },
+    { word: "CHROMOSOME", hint: "DNA-carrying structure in the cell nucleus" },
+    { word: "ELECTROMAGNET", hint: "A magnet powered by electric current" },
+    { word: "OSMOSIS", hint: "Movement of water across a semi-permeable membrane" },
+    { word: "NEUTRON", hint: "Uncharged particle in the atomic nucleus" },
+    { word: "CATALYST", hint: "Substance that speeds up a chemical reaction without being consumed" },
+    { word: "HYPOTHESIS", hint: "A testable prediction in the scientific method" },
+  ],
+  "Web Development": [
+    { word: "JAVASCRIPT", hint: "The scripting language of the web" },
+    { word: "RESPONSIVE", hint: "Design that adapts to different screen sizes" },
+    { word: "CALLBACK", hint: "A function passed as an argument to another function" },
+    { word: "STYLESHEET", hint: "A file that describes how HTML elements are displayed" },
+    { word: "LOCALHOST", hint: "Your own machine as a server (127.0.0.1)" },
+    { word: "FRAMEWORK", hint: "A pre-built structure for building applications" },
+    { word: "DEBUGGING", hint: "The process of finding and fixing code errors" },
+    { word: "BANDWIDTH", hint: "The maximum rate of data transfer across a network" },
+  ],
+  Math: [
+    { word: "POLYNOMIAL", hint: "An expression with multiple terms involving variables" },
+    { word: "DERIVATIVE", hint: "Measures instantaneous rate of change in calculus" },
+    { word: "PYTHAGOREAN", hint: "Famous theorem relating sides of a right triangle" },
+    { word: "PERMUTATION", hint: "Ordered arrangement of a set of items" },
+    { word: "LOGARITHM", hint: "The exponent to which a base must be raised" },
+    { word: "ASYMPTOTE", hint: "A line a curve approaches but never touches" },
+    { word: "QUADRATIC", hint: "A polynomial of degree two" },
+    { word: "PROBABILITY", hint: "The likelihood of an event occurring" },
+  ],
+};
+
+const PARTS = ["h-head","h-body","h-arm-l","h-arm-r","h-leg-l","h-leg-r"];
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+let currentWord = "";
+let currentHint = "";
+let currentCategory = "";
+let guessed = new Set();
+let mistakes = 0;
+const MAX_MISTAKES = 6;
+let lastGuess = null; // { letter, wasWrong }
+
+function pickWord() {
+  const cats = Object.keys(WORDS);
+  currentCategory = cats[Math.floor(Math.random() * cats.length)];
+  const list = WORDS[currentCategory];
+  const entry = list[Math.floor(Math.random() * list.length)];
+  currentWord = entry.word;
+  currentHint = entry.hint;
+}
+
+function renderWord() {
+  const display = document.getElementById("word-display");
+  display.innerHTML = "";
+  for (const ch of currentWord) {
+    const box = document.createElement("div");
+    box.className = "letter-box";
+    box.id = "box-" + ch + "-" + [...currentWord].indexOf(ch);
+    if (guessed.has(ch)) {
+      box.textContent = ch;
+      box.classList.add("reveal");
+    }
+    display.appendChild(box);
+  }
+  // Re-render all revealed letters correctly
+  const boxes = display.querySelectorAll(".letter-box");
+  [...currentWord].forEach((ch, i) => {
+    if (guessed.has(ch)) boxes[i].textContent = ch;
+  });
+}
+
+function renderKeyboard() {
+  const kb = document.getElementById("keyboard");
+  kb.innerHTML = "";
+  for (const letter of ALPHABET) {
+    const key = document.createElement("button");
+    key.className = "key";
+    key.textContent = letter;
+    key.dataset.letter = letter;
+    if (guessed.has(letter)) {
+      key.disabled = true;
+      key.classList.add(currentWord.includes(letter) ? "correct" : "wrong");
+    }
+    key.addEventListener("click", () => handleGuess(letter));
+    kb.appendChild(key);
+  }
+}
+
+function handleGuess(letter) {
+  if (guessed.has(letter)) return;
+  guessed.add(letter);
+
+  const key = document.querySelector(`.key[data-letter="${letter}"]`);
+  if (currentWord.includes(letter)) {
+    key.classList.add("correct");
+    const boxes = document.querySelectorAll(".letter-box");
+    [...currentWord].forEach((ch, i) => {
+      if (ch === letter) {
+        boxes[i].textContent = ch;
+        boxes[i].classList.add("reveal");
+      }
+    });
+    lastGuess = { letter, wasWrong: false };
+    checkWin();
+  } else {
+    key.classList.add("wrong");
+    mistakes++;
+    document.getElementById("mistake-count").textContent = mistakes;
+    showBodyPart(mistakes - 1);
+    lastGuess = { letter, wasWrong: true };
+    checkLose();
+  }
+  key.disabled = true;
+  updateUndoBtn();
+}
+
+function undoLastGuess() {
+  if (!lastGuess) return;
+  const { letter, wasWrong } = lastGuess;
+  lastGuess = null;
+  guessed.delete(letter);
+  if (wasWrong) {
+    mistakes--;
+    document.getElementById("mistake-count").textContent = mistakes;
+    document.getElementById(PARTS[mistakes]).setAttribute("display","none");
+  } else {
+    const boxes = document.querySelectorAll(".letter-box");
+    [...currentWord].forEach((ch, i) => {
+      if (ch === letter) { boxes[i].textContent = ""; boxes[i].classList.remove("reveal"); }
+    });
+  }
+  const key = document.querySelector(`.key[data-letter="${letter}"]`);
+  if (key) { key.disabled = false; key.classList.remove("correct","wrong"); }
+  updateUndoBtn();
+}
+
+function updateUndoBtn() {
+  const btn = document.getElementById("btn-undo");
+  const label = document.getElementById("undo-label");
+  if (lastGuess) { btn.disabled = false; label.textContent = lastGuess.letter; }
+  else { btn.disabled = true; label.textContent = "—"; }
+}
+
+function showBodyPart(index) {
+  if (index < PARTS.length) {
+    document.getElementById(PARTS[index]).removeAttribute("display");
+  }
+}
+
+function hideAllParts() {
+  PARTS.forEach(id => document.getElementById(id).setAttribute("display","none"));
+}
+
+function checkWin() {
+  const allGuessed = [...currentWord].every(ch => guessed.has(ch));
+  if (allGuessed) showModal(true);
+}
+
+function checkLose() {
+  if (mistakes >= MAX_MISTAKES) showModal(false);
+}
+
+function showModal(won) {
+  const overlay = document.getElementById("modal");
+  document.getElementById("modal-icon").textContent = won ? "🏆" : "💀";
+  const title = document.getElementById("modal-title");
+  title.textContent = won ? "You won!" : "Game over";
+  title.className = "modal-title " + (won ? "win" : "lose");
+  document.getElementById("modal-msg").textContent = won
+    ? "Excellent! You guessed the word correctly."
+    : `The correct word was:`;
+  document.getElementById("modal-word").textContent = currentWord;
+  overlay.classList.add("show");
+}
+
+function nextWord() {
+  document.getElementById("modal").classList.remove("show");
+  initGame();
+}
+
+function initGame() {
+  guessed = new Set();
+  mistakes = 0;
+  lastGuess = null;
+  pickWord();
+  document.getElementById("mistake-count").textContent = "0";
+  document.getElementById("category-tag").textContent = currentCategory;
+  document.getElementById("hint-text").textContent = currentHint;
+  hideAllParts();
+  renderWord();
+  renderKeyboard();
+  updateUndoBtn();
+}
+
+document.addEventListener("keydown", e => {
+  const letter = e.key.toUpperCase();
+  if (ALPHABET.includes(letter) && !document.getElementById("modal").classList.contains("show")) {
+    handleGuess(letter);
+  }
+});
+
+initGame();
+</script>
+</body>
+</html>
